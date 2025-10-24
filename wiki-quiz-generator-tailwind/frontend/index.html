@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI Wiki Quiz Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{ --accent: 43 108 176; }
+    .accent { background-color: rgb(var(--accent)); color: white; }
+    .accent-500 { background-color: rgba(var(--accent),1); }
+    .accent-600 { background-color: rgba(var(--accent),0.9); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <div class="max-w-5xl mx-auto p-4">
+    <header class="flex items-center justify-between py-4">
+      <div>
+        <h1 class="text-2xl font-semibold text-slate-900">AI Wiki Quiz Generator</h1>
+        <p class="text-sm text-slate-600">Generate quizzes from Wikipedia articles — grounded, shareable, and stored.</p>
+      </div>
+      <div class="hidden md:flex items-center gap-3">
+        <button id="aboutBtn" class="px-4 py-2 rounded-md text-sm font-medium border border-slate-200 hover:shadow-sm">About</button>
+        <a href="#" class="px-4 py-2 rounded-md text-sm font-medium accent">New</a>
+      </div>
+    </header>
+
+    <nav class="mt-4 bg-white rounded-lg shadow-sm p-2 flex gap-2 md:gap-4">
+      <button id="tab-gen" class="tab-btn flex-1 py-2 px-3 rounded-md text-sm font-medium bg-blue-50 text-slate-800">Generate Quiz</button>
+      <button id="tab-hist" class="tab-btn flex-1 py-2 px-3 rounded-md text-sm font-medium hover:bg-blue-50">History</button>
+      <div class="ml-auto flex items-center gap-2">
+        <input id="urlPreview" type="url" placeholder="Paste Wikipedia URL" class="hidden md:inline-block px-3 py-2 rounded-md border border-slate-200 w-72" />
+        <button id="openForm" class="px-3 py-2 rounded-md bg-white border border-slate-200 hover:shadow">Open</button>
+      </div>
+    </nav>
+
+    <main class="mt-6">
+      <section id="panel-gen">
+        <div class="bg-white rounded-lg shadow p-4">
+          <form id="genForm" class="space-y-3">
+            <div class="flex flex-col md:flex-row gap-3">
+              <input id="url" type="url" placeholder="https://en.wikipedia.org/wiki/Alan_Turing" class="flex-1 px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              <button id="gen" class="px-5 py-3 rounded-lg accent-500 hover:accent-600 text-white font-semibold">Generate Quiz</button>
+            </div>
+            <div id="gen-msg" class="text-sm text-slate-500"></div>
+          </form>
+        </div>
+
+        <div id="result" class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6"></div>
+      </section>
+
+      <section id="panel-hist" style="display:none">
+        <div class="bg-white rounded-lg shadow p-4">
+          <h2 class="text-lg font-semibold mb-3">History</h2>
+          <div id="history-list" class="space-y-3"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="mt-8 text-center text-sm text-slate-500">
+      Built with ❤️ · Tailwind CDN · FastAPI backend
+    </footer>
+  </div>
+
+  <div id="modal" class="fixed inset-0 hidden items-center justify-center z-50">
+    <div class="absolute inset-0 bg-black/40"></div>
+    <div class="relative max-w-3xl w-full mx-4">
+      <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div class="p-4 border-b flex justify-between items-center">
+          <h3 id="modal-title" class="text-lg font-semibold">Details</h3>
+          <button id="closeModal" class="px-3 py-1 rounded bg-slate-100">Close</button>
+        </div>
+        <div id="modal-body" class="p-4 max-h-[60vh] overflow-auto"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const apiBase = '';
+const tabGen = document.getElementById('tab-gen');
+const tabHist = document.getElementById('tab-hist');
+const panelGen = document.getElementById('panel-gen');
+const panelHist = document.getElementById('panel-hist');
+const resultEl = document.getElementById('result');
+const historyList = document.getElementById('history-list');
+const modal = document.getElementById('modal');
+const modalBody = document.getElementById('modal-body');
+const modalTitle = document.getElementById('modal-title');
+
+tabGen.addEventListener('click', ()=>{ show('gen') });
+tabHist.addEventListener('click', ()=>{ show('hist'); loadHistory(); });
+
+function show(t){
+  panelGen.style.display = t==='gen'?'block':'none';
+  panelHist.style.display = t==='hist'?'block':'none';
+  tabGen.classList.toggle('bg-blue-50', t==='gen');
+  tabHist.classList.toggle('bg-blue-50', t==='hist');
+}
+
+document.getElementById('genForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const url = document.getElementById('url').value.trim();
+  if(!url){ alert('Enter a valid Wikipedia URL'); return; }
+  document.getElementById('gen-msg').innerText = 'Generating quiz — this may take a few seconds...';
+  try{
+    const res = await fetch('/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url})
+    });
+    if(!res.ok){ const t = await res.text(); throw new Error(t||res.status); }
+    const data = await res.json();
+    document.getElementById('gen-msg').innerText = '';
+    renderResultCards(data);
+  }catch(err){
+    document.getElementById('gen-msg').innerText = 'Error: '+err.message;
+  }
+});
+
+function renderResultCards(data){
+  resultEl.innerHTML = '';
+  const summaryCard = document.createElement('div');
+  summaryCard.className = 'bg-white rounded-lg shadow p-4';
+  summaryCard.innerHTML = `<h2 class="text-xl font-semibold">${escapeHtml(data.title)}</h2>
+    <div class="text-sm text-slate-500 mb-2">${escapeHtml(data.url)}</div>
+    <p class="text-sm text-slate-700 mb-3">${escapeHtml(data.summary)}</p>
+    <div class="flex flex-wrap gap-2"><strong class="text-sm">Sections:</strong> ${ (data.sections||[]).slice(0,5).map(s=>` <span class="px-2 py-1 text-xs rounded bg-blue-50 text-blue-700">${escapeHtml(s)}</span>`).join('') }</div>
+    <div class="mt-3"><button class="px-3 py-2 rounded bg-slate-100" onclick="openModal(${data.id||0})">View Details</button></div>`;
+  resultEl.appendChild(summaryCard);
+
+  const quizCard = document.createElement('div');
+  quizCard.className = 'bg-white rounded-lg shadow p-4';
+  let inner = '<h3 class="text-lg font-semibold mb-2">Quiz</h3>';
+  data.quiz.forEach((q,i)=>{
+    inner += `<div class="mb-3"><div class="flex items-center justify-between"><div class="font-medium">Q${i+1}: ${escapeHtml(q.question)}</div><div class="text-xs px-2 py-1 rounded ${q.difficulty==='easy'?'bg-green-100 text-green-800':'bg-yellow-100 text-yellow-800'}">${escapeHtml(q.difficulty)}</div></div>`;
+    inner += '<ol class="list-decimal pl-5 mt-1">';
+    q.options.forEach(opt=> inner += `<li class="py-1 text-sm">${escapeHtml(opt)}</li>`);
+    inner += `</ol><div class="text-xs text-slate-500 mt-1">Explanation: ${escapeHtml(q.explanation)}</div></div>`;
+  });
+  inner += '<div class="mt-2"><strong>Related:</strong> '+(data.related_topics||[]).map(t=>`<span class="px-2 py-1 text-xs rounded bg-blue-50 text-blue-700 mr-1">${escapeHtml(t)}</span>`).join('') + '</div>';
+  quizCard.innerHTML = inner;
+  resultEl.appendChild(quizCard);
+}
+
+async function loadHistory(){
+  historyList.innerHTML = 'Loading...';
+  try{
+    const res = await fetch('/history');
+    if(!res.ok){ throw new Error(res.status); }
+    const rows = await res.json();
+    historyList.innerHTML = '';
+    rows.forEach(r=>{
+      const card = document.createElement('div');
+      card.className = 'p-3 border rounded hover:shadow-sm flex justify-between items-center';
+      card.innerHTML = `<div><div class="font-medium">${escapeHtml(r.title||r.url)}</div><div class="text-xs text-slate-500">${r.created_at||''}</div></div>
+        <div class="flex gap-2"><button class="px-3 py-1 rounded bg-slate-100" onclick="showDetails(${r.id})">Details</button></div>`;
+      historyList.appendChild(card);
+    });
+  }catch(e){
+    historyList.innerText = 'Error loading history: '+e.message;
+  }
+}
+
+async function showDetails(id){
+  try{
+    const res = await fetch('/details/'+id);
+    if(!res.ok){ throw new Error(res.status); }
+    const data = await res.json();
+    openModalWithData(data);
+  }catch(e){
+    alert('Unable to fetch details: '+e.message);
+  }
+}
+
+function openModalWithData(data){
+  modalTitle.innerText = data.title || 'Details';
+  modalBody.innerHTML = '';
+  const el = document.createElement('div');
+  el.innerHTML = `<p class="text-sm text-slate-600 mb-2">${escapeHtml(data.summary)}</p>`;
+  data.quiz.forEach((q,i)=>{
+    const qdiv = document.createElement('div');
+    qdiv.className = 'mb-3';
+    qdiv.innerHTML = `<div class="font-medium">Q${i+1}: ${escapeHtml(q.question)}</div><ol class="pl-5 list-decimal mt-1">${q.options.map(o=>`<li class="py-1 text-sm">${escapeHtml(o)}</li>`).join('')}</ol><div class="text-xs text-slate-500 mt-1">Explanation: ${escapeHtml(q.explanation)}</div>`;
+    el.appendChild(qdiv);
+  });
+  el.innerHTML += '<div class="mt-2"><strong>Related:</strong> ' + (data.related_topics||[]).map(t=>`<span class="px-2 py-1 text-xs rounded bg-blue-50 text-blue-700 mr-1">${escapeHtml(t)}</span>`).join('') + '</div>';
+  modalBody.appendChild(el);
+  modal.style.display = 'flex';
+}
+
+document.getElementById('closeModal').addEventListener('click', ()=> modal.style.display='none');
+modal.addEventListener('click', (e)=>{ if(e.target===modal) modal.style.display='none' });
+
+function openModal(id){
+  if(!id || id===0){ modalTitle.innerText='Preview'; modalBody.innerHTML = '<p class="text-sm text-slate-500">Preview only. Save to see details in history.</p>'; modal.style.display='flex'; return; }
+  showDetails(id);
+}
+
+function escapeHtml(s){ if(!s && s!==0) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+</script>
+</body>
+</html>

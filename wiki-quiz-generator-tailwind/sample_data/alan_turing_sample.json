@@ -1,0 +1,16 @@
+{
+  "id": 1,
+  "url": "https://en.wikipedia.org/wiki/Alan_Turing",
+  "title": "Alan Turing",
+  "summary": "Alan Turing was a British mathematician and computer scientist...",
+  "sections": [
+    "Early life",
+    "World War II",
+    "Legacy"
+  ],
+  "quiz": [],
+  "related_topics": [
+    "Cryptography",
+    "Enigma machine"
+  ]
+}

@@ -1,0 +1,9 @@
+Generate between 5 and 10 multiple-choice questions (4 options each) grounded strictly on the provided Wikipedia article content.
+Output JSON array of questions where each question has:
+- question
+- options (array of 4 strings)
+- answer (exactly one of the options)
+- difficulty (easy|medium|hard)
+- explanation (short, 15-40 words)
+Also output a JSON array `related_topics` listing 3-6 Wikipedia topics for further reading strictly related to article content.
+Be conservative and avoid inventing facts not in the content.

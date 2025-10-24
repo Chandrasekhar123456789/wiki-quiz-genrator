@@ -1,0 +1,1 @@
+This project includes a Tailwind-styled frontend (cool blue) and FastAPI backend. See previous instructions.
